@@ -1,4 +1,4 @@
-Markdown# Threshold OTP Group Messaging (TOGM) v3.3 Reinforced Initialization & Entropy Integrity Edition (RIE)
+# Threshold OTP Group Messaging (TOGM) v3.4 Reinforced Initialization & Entropy Integrity Edition (RIE)
 
 **Three Inconquerabilities — Hardened to Absoluteness**  
 **Unconditional Information-Theoretic Security**
@@ -8,13 +8,13 @@ Markdown# Threshold OTP Group Messaging (TOGM) v3.3 Reinforced Initialization & 
 
 ## Overview
 
-TOGM v3.3 RIE is the ultimate hardening of the Absolute Purity line, addressing all initialization weaknesses through Multi-Source Entropy Aggregation (MSEA), Universal Hash extraction, and full NIST SP 800-90B validation. The protocol's architecture is implemented in Rust with a modular, no_std core, ensuring zero external cryptographic dependencies and portability across anonymity networks like Tor and I2P.
+TOGM v3.4 RIE is the ultimate hardening of the Absolute Purity line, addressing all initialization weaknesses through Multi-Source Entropy Aggregation (MSEA), Universal Hash extraction, and full NIST SP 800-90B validation. The protocol's architecture is implemented in Rust with a modular, no_std core, ensuring zero external cryptographic dependencies and portability across anonymity networks like Tor and I2P.
 
 The Master Pad construction via BGW MPC over GF(2^8) guarantees information-theoretic security: even if drand is fully compromised and t-1 devices are backdoored, the gigabyte-scale pad remains unconditionally random, provided at least one honest hardware entropy source contributes. Scale-aware design adapts entropy sourcing—continuous drand for small groups (n ≤ 50) and aggregated hardware noise for large groups (n > 50)—while DBAP enforces device integrity across local, pairwise, and threshold layers.
 
 Key engineering features include SIMD-optimized XOR in `core/xor.rs`, asynchronous bootstrap in `protocol/bootstrap/orchestrator.rs`, and watchdog anomaly detection. Post-bootstrap, the system operates fully offline, with pure OTP per 4096-byte block and SIP for integrity.
 
-**Repository:** https://github.com/daoquynhthu/TOGM-Rust-v3.3-RIE
+**Repository:** https://github.com/daoquynhthu/TOGM-Rust-v3.4-RIE
 
 ## Security Properties
 
@@ -45,7 +45,7 @@ For full details, refer to the [whitepaper](docs/WHITEPAPER_COMPLIANCE.md) and [
 | v3.1    | Remove runtime drand | One-time BLAKE3 chain (computational, deprecated) |
 | v3.2    | Gigabyte Master Pad  | Pure OTP + Sixth Iron Law (`pad/lifecycle.rs`) |
 | v3.2 APE| Absolute Purity      | Physical entropy + continuous drand (`entropy/sources.rs`) |
-| v3.3 RIE| Initialization unconquerable | MSEA + Universal Hash + NIST 90B + SIP + DBAP + Rust no_std core |
+| v3.4 RIE| Initialization unconquerable | MSEA + Universal Hash + NIST 90B + SIP + DBAP + Rust no_std core |
 
 ## Prerequisites
 
@@ -58,7 +58,7 @@ For full details, refer to the [whitepaper](docs/WHITEPAPER_COMPLIANCE.md) and [
 ## Building
 
 1. Clone the repository:
-git clone https://github.com/daoquynhthu/TOGM-Rust-v3.3-RIE.git
+git clone https://github.com/daoquynhthu/TOGM-Rust-v3.4-RIE.git
 cd TOGM-Rust-v3.3-RIE
 text2. Enable features as needed (e.g., for small groups n ≤ 50):
 cargo build --release --features "drand i2p dbap watchdog"
