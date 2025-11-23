@@ -96,11 +96,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
  Ok(())
 }
 
+```
+
 For small groups (n ≤ 50): Drand interleaves automatically.
 Locked-mode enforced; entropy validated via NIST SP 800-90B.
 Distribution: Batched over Noise XX (30s) via Tor/I2P.
 
-Messaging (Offline-Capable OTP)
+### Messaging (Offline-Capable OTP)
 Encrypt and send 4096B blocks:
 Rustuse togm::core::otp_engine::{encrypt, sip_mac};
 use togm::pad::masterpad::MasterPad;
@@ -118,7 +120,7 @@ Reconstruction: On-demand Lagrange interpolation from ≥t shares.
 Ratchet: Triggers MSEA re-bootstrap on membership changes.
 Integrity: SIP MAC over GF(2^8); DBAP consensus.
 
-Iron Laws Enforcement
+### Iron Laws Enforcement
 Enforced via iron_laws.rs and state machine:
 
 48h absence → auto-burn (+12h grace).
@@ -135,20 +137,21 @@ Linking: QR temporary + roster fingerprinting (multi_device/linking.rs).
 Limits: Per-grade caps + threshold signatures (multi_device/limiter.rs).
 Roles: Threshold-signed changes (group_permissions/role_management.rs).
 
-FFI Examples
+### FFI Examples
 See examples/ for Swift, C++, and Python bindings via include/togm.h (cbindgen-generated).
 Testing and Auditing
 
-Unit tests: cargo test (all modules, >98% coverage).
+### Unit tests: cargo test (all modules, >98% coverage).
 Integration: cargo test --test dbap_full_cycle (three-layer DBAP + network splits).
 Audit docs: RUST_AUDIT_FIXES.md; invites for Trail of Bits/Cure53.
-```
 
-## Threat Model
+
+### Threat Model
 Adversary: Computationally unbounded, active, controls public channels. Capabilities: drand compromise, <t backdoors, traffic analysis on Tor/I2P, entropy poisoning. Honest majority t=⌈2n/3⌉. Defeated via MSEA linearity, DBAP proofs, Iron Laws.
 
 ## Contributing
 Contributions must adhere to WHITEPAPER_COMPLIANCE.md: no PRNG/PRF/XOF; NIST-compliant entropy; full DBAP/SIP. Fork, branch, PR with tests.
+
 ## License
 This project is licensed under the AGPL-3.0 (see LICENSE). For production use, ensure compliance with anonymity and export controls.
 For questions, open an issue or contact the Anonymous Geek Collective.
