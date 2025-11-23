@@ -142,11 +142,13 @@ Testing and Auditing
 Unit tests: cargo test (all modules, >98% coverage).
 Integration: cargo test --test dbap_full_cycle (three-layer DBAP + network splits).
 Audit docs: RUST_AUDIT_FIXES.md; invites for Trail of Bits/Cure53.
+```
 
-Threat Model
+## Threat Model
 Adversary: Computationally unbounded, active, controls public channels. Capabilities: drand compromise, <t backdoors, traffic analysis on Tor/I2P, entropy poisoning. Honest majority t=⌈2n/3⌉. Defeated via MSEA linearity, DBAP proofs, Iron Laws.
-Contributing
+
+## Contributing
 Contributions must adhere to WHITEPAPER_COMPLIANCE.md: no PRNG/PRF/XOF; NIST-compliant entropy; full DBAP/SIP. Fork, branch, PR with tests.
-License
+## License
 This project is licensed under the AGPL-3.0 (see LICENSE). For production use, ensure compliance with anonymity and export controls.
 For questions, open an issue or contact the Anonymous Geek Collective.
