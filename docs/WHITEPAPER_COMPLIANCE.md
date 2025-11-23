@@ -1,4 +1,4 @@
-% === BEGIN TOGM v3.3 RIE FINAL WHITEPAPER ===
+% === BEGIN TOGM v3.4 RIE FINAL WHITEPAPER ===
 
 \documentclass[11pt,a4paper,titlepage]{article}
 \usepackage[utf8]{inputenc}
@@ -74,7 +74,7 @@ Unconditional Information-Theoretic Security}}
 \maketitle
 
 \begin{abstract}
-TOGM v3.3 Reinforced Initialization \& Entropy Integrity Edition (RIE) represents the ultimate hardening of the Absolute Purity line, addressing all initialization weaknesses through Multi-Source Entropy Aggregation (MSEA), Universal Hash extraction, and full NIST SP 800-90B validation. The protocol's architecture is implemented in Rust with a modular, no\_std core, ensuring zero external cryptographic dependencies and portability across anonymity networks like Tor and I2P.
+TOGM v3.4 Reinforced Initialization \& Entropy Integrity Edition (RIE) represents the ultimate hardening of the Absolute Purity line, addressing all initialization weaknesses through Multi-Source Entropy Aggregation (MSEA), Universal Hash extraction, and full NIST SP 800-90B validation. The protocol's architecture is implemented in Rust with a modular, no\_std core, ensuring zero external cryptographic dependencies and portability across anonymity networks like Tor and I2P.
 
 The Master Pad construction via BGW MPC over GF(2$^8$) guarantees information-theoretic security: even if drand is fully compromised and $t-1$ devices are backdoored, the gigabyte-scale pad remains unconditionally random, provided at least one honest hardware entropy source contributes. Scale-aware design adapts entropy sourcing—continuous drand for small groups ($n \le 50$) and aggregated hardware noise for large groups ($n > 50$)—while DBAP enforces device integrity across local, pairwise, and threshold layers.
 
@@ -89,7 +89,7 @@ Repository: \url{https://github.com/daoquynhthu/TOGM-Rust-v3.3-RIE}
 
 \section{The Three Inconquerabilities — Reinforced Edition}
 
-TOGM v3.3 RIE enshrines three foundational security properties, realized through a Rust-based architecture that separates pure mathematical primitives (core/) from network protocols (net/) and state management (protocol/). The design prioritizes information-theoretic security (ITS) post-bootstrap, with no PRNG, PRF, or XOF dependencies enforced via iron\_laws.rs.
+TOGM v3.4 RIE enshrines three foundational security properties, realized through a Rust-based architecture that separates pure mathematical primitives (core/) from network protocols (net/) and state management (protocol/). The design prioritizes information-theoretic security (ITS) post-bootstrap, with no PRNG, PRF, or XOF dependencies enforced via iron\_laws.rs.
 
 \subsection{Information-Theoretic Inconquerability (Pure ITS)}
 The core invariant is perfect secrecy via Shannon's theorem: ciphertext indistinguishability from uniform noise when plaintext length $\le$ keystream. The gigabyte-scale Master Pad is constructed as:
@@ -128,12 +128,12 @@ v3.0 & Pure ITS core & Runtime drand every 30 s (net/drand/client.rs) \\
 v3.1 & Remove runtime drand & One-time BLAKE3 chain (computational, deprecated) \\
 v3.2 & Gigabyte Master Pad & Pure OTP + Sixth Iron Law (pad/lifecycle.rs) \\
 v3.2 APE & Absolute Purity & Physical entropy + continuous drand (entropy/sources.rs) \\
-v3.3 RIE & Initialization unconquerable & MSEA + Universal Hash + NIST 90B + SIP + DBAP + Rust no\_std core \\
+v3.4 RIE & Initialization unconquerable & MSEA + Universal Hash + NIST 90B + SIP + DBAP + Rust no\_std core \\
 \bottomrule
 \caption{Version Evolution}
 \end{longtable}
 
-v3.3 RIE introduces scale-adaptive entropy (entropy/aggregator.rs: if $n \le 50$, enable "drand" feature) and full Rust hardening (Cargo.toml: lto=thin, panic=abort; build.rs generates constants).
+v3.4 RIE introduces scale-adaptive entropy (entropy/aggregator.rs: if $n \le 50$, enable "drand" feature) and full Rust hardening (Cargo.toml: lto=thin, panic=abort; build.rs generates constants).
 
 \section{Final Achieved Security Properties}
 
@@ -267,7 +267,7 @@ Strict adherence ensures ITS purity (WHITEPAPER\_COMPLIANCE.md):
 
 \section{Conclusion}
 
-TOGM v3.3 RIE's architecture—modular Rust core, MSEA-validated entropy, BGW-shared OTP, DBAP proofs, and Iron Laws—eliminates bootstrap vulnerabilities while scaling to $n=500$ (O($n \log n$) via quorums). Even under global drand compromise, $t-1$ backdoors, or adversarial networks, the Master Pad remains information-theoretically secure.
+TOGM v3.4 RIE's architecture—modular Rust core, MSEA-validated entropy, BGW-shared OTP, DBAP proofs, and Iron Laws—eliminates bootstrap vulnerabilities while scaling to $n=500$ (O($n \log n$) via quorums). Even under global drand compromise, $t-1$ backdoors, or adversarial networks, the Master Pad remains information-theoretically secure.
 
 This protocol realizes a sovereign, unconquerable enclave: mathematically infinite computation fails; physically, $\ge t$ simultaneous captures required; humanly, instant veto possible.
 
