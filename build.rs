@@ -1,0 +1,34 @@
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use blake3::Hasher;  // Cargo 自动导入（build-dependencies 已声明）
+use cbindgen;        // Cargo 自动导入
+
+fn main() {
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
+    let crate_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+
+    // 生成 genesis_hash.rs：blake3 哈希 src/lib.rs（白皮书 1.2）
+    let lib_path = Path::new(&crate_dir).join("src/lib.rs");
+    if !lib_path.exists() {
+        panic!("src/lib.rs missing; create the file before building");
+    }
+    let lib_content = fs::read(&lib_path).expect("Failed to read src/lib.rs");
+    let mut hasher = Hasher::new();
+    hasher.update(&lib_content);
+    let hash = hasher.finalize();
+    let genesis_code = format!("pub const GENESIS_HASH: [u8; 32] = {:?};", hash.as_bytes());
+    let genesis_path = out_dir.join("genesis_hash.rs");
+    fs::write(&genesis_path, genesis_code).expect("Failed to write genesis_hash.rs");
+
+    // 生成 cbindgen 头：直接借用 &crate_dir（修复类型歧义）
+    let bindings = cbindgen::generate(&crate_dir).expect("cbindgen generation failed");
+    if !bindings.write_to_file(Path::new("include/togm.h")) {
+        panic!("Failed to write togm.h");
+    }
+
+    // Cargo 指令
+    println!("cargo:rerun-if-changed=src/");
+    println!("cargo:rerun-if-changed=build.rs");
+}

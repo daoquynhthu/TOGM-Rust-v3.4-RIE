@@ -50,3 +50,4 @@ opt-level = 1
 
 [build-dependencies]
 cbindgen = "0.26"
+blake3 = { version = "1.5", default-features = false, features = ["std"] }  # 修复：完整声明，支持 build.rs std 使用
