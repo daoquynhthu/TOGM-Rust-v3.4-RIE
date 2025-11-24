@@ -2,14 +2,14 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use blake3::Hasher;  // Cargo 自动导入（build-dependencies 已声明）
-use cbindgen;        // Cargo 自动导入
+use blake3::Hasher;
+use cbindgen;
 
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
     let crate_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
 
-    // 生成 genesis_hash.rs：blake3 哈希 src/lib.rs（白皮书 1.2）
+    // 生成 genesis_hash.rs
     let lib_path = Path::new(&crate_dir).join("src/lib.rs");
     if !lib_path.exists() {
         panic!("src/lib.rs missing; create the file before building");
@@ -22,10 +22,18 @@ fn main() {
     let genesis_path = out_dir.join("genesis_hash.rs");
     fs::write(&genesis_path, genesis_code).expect("Failed to write genesis_hash.rs");
 
-    // 生成 cbindgen 头：直接借用 &crate_dir（修复类型歧义）
+    // 生成 cbindgen 头
     let bindings = cbindgen::generate(&crate_dir).expect("cbindgen generation failed");
-    if !bindings.write_to_file(Path::new("include/togm.h")) {
-        panic!("Failed to write togm.h");
+    
+    let header_path = Path::new("include/togm.h");
+    if let Err(e) = fs::create_dir_all(header_path.parent().unwrap()) {
+        println!("cargo:warning=Failed to create include/ directory: {}", e);
+    }
+    
+    if !bindings.write_to_file(header_path) {
+        println!("cargo:warning=Failed to write togm.h: check permissions or src/lib.rs content");
+    } else {
+        println!("cargo:info=togm.h generated successfully");
     }
 
     // Cargo 指令
