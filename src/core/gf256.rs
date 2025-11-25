@@ -5,13 +5,33 @@
 //! resist side-channel attacks, with a default implementation using pure bit operations (no lookup
 //! tables) to prevent cache-timing leaks. This aligns with the project's paranoid security posture.
 //!
+//! # Mathematical Background
+//!
+//! GF(2^8) is the finite field with 256 elements, isomorphic to polynomials 
+//! over GF(2) modulo an irreducible polynomial of degree 8.
+//! 
+//! **Irreducible Polynomial:** x^8 + x^4 + x^3 + x + 1 (0x11B in hex)
+//! This is the same polynomial used in AES.
+//! 
+//! **Operations:**
+//! - Addition: XOR (coefficient-wise in polynomial representation)
+//! - Multiplication: Polynomial multiplication mod 0x11B
+//! - Inverse: Using Fermat's Little Theorem: a^{-1} = a^{254}
+//! 
+//! # Security Properties
+//!
+//! All operations are implemented with the following guarantees:
+//! - **Constant-time:** Execution time independent of input values
+//! - **Branch-free:** No conditional jumps based on secret data
+//! - **Cache-safe:** No secret-dependent memory access (default mode)
+//!
 //! # Design Choices
 //! - **No Tables by Default**: Multiplication uses bit-serial computation with masks for conditional
 //!   operations, ensuring branch-free execution. Feature "gf256-table" (disabled in paranoid mode)
 //!   enables log/antilog tables for performance at the cost of potential cache attacks.
 //! - **Constant-Time**: Fixed iterations with mask-based conditionals; no data-dependent branches.
 //! - **Zero Dependencies**: Pure no_std implementation.
-//! - **Branch-Free**: Uses wrapping_mul(!0u8) for masks instead of if-statements.
+//! - **Branch-Free**: Uses wrapping_neg for masks instead of if-statements.
 //!
 //! # Whitepaper Compliance
 //! - Maps to Section 1.1 (BGW MPC over GF(2^8)) and 1.2 (SIP tags over GF).
@@ -31,10 +51,192 @@
 #![no_std]
 #![forbid(unsafe_code)]  // Enforce safe Rust for memory safety
 
-use core::ops::{Add, AddAssign, Mul, MulAssign};
+use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub};
 
 /// Low byte of irreducible polynomial (full poly: 0x11B).
 const POLY: u8 = 0x1B;
+
+/// Full irreducible polynomial (x^8 + x^4 + x^3 + x + 1).
+const POLY_FULL: u16 = 0x11B;
+
+/// Multiplicative identity.
+pub const ONE: GF256 = GF256(1);
+
+/// Additive identity.
+pub const ZERO: GF256 = GF256(0);
+
+/// Generator of the multiplicative group (primitive element).
+pub const GENERATOR: GF256 = GF256(0x03);
+
+/// Mask type for constant-time conditionals.
+type Mask8 = u8;
+type Mask16 = u16;
+
+/// Creates an all-1s or all-0s mask from a boolean.
+#[inline(always)]
+const fn bool_mask_u8(b: bool) -> Mask8 {
+    (b as u8).wrapping_neg()
+}
+
+/// Creates an all-1s or all-0s mask from a boolean (u16 variant).
+#[inline(always)]
+const fn bool_mask_u16(b: bool) -> Mask16 {
+    (b as u16).wrapping_neg()
+}
+
+/// The finite field element type, wrapping a u8.
+///
+/// This wrapper ensures domain-specific operations and prevents accidental misuse (e.g., raw XOR
+/// instead of GF add).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct GF256(pub u8);
+
+impl From<u8> for GF256 {
+    /// Converts a u8 to GF256. No validation needed as GF(2^8) covers all 256 values.
+    ///
+    /// # Safety Guarantees
+    /// - Trivial conversion; constant-time (single copy).
+    /// - Thread-safe: No shared state.
+    /// - Side-channel resistant: No conditional execution.
+    ///
+    /// # Prohibited
+    /// - None.
+    ///
+    /// # Performance
+    /// - Zero overhead (~1 cycle).
+    ///
+    /// # Failure Modes
+    /// - None; always succeeds.
+    ///
+    /// # Whitepaper Compliance
+    /// - Implicit in all GF ops (Section 1.1).
+    #[inline(always)]
+    fn from(value: u8) -> Self {
+        GF256(value)
+    }
+}
+
+impl From<GF256> for u8 {
+    /// Extracts the underlying u8.
+    ///
+    /// # Safety Guarantees
+    /// - Constant-time extraction.
+    /// - Thread-safe.
+    /// - Side-channel resistant.
+    ///
+    /// # Prohibited
+    /// - Avoid direct use in non-GF contexts to prevent semantic errors (e.g., arithmetic ops).
+    ///
+    /// # Performance
+    /// - Zero overhead.
+    ///
+    /// # Failure Modes
+    /// - None.
+    #[inline(always)]
+    fn from(gf: GF256) -> u8 {
+        gf.0
+    }
+}
+
+/// GF(2^8) addition: simple XOR, as the field characteristic is 2.
+///
+/// This is bitwise XOR, which is linear over GF(2^8).
+impl Add for GF256 {
+    type Output = Self;
+
+    /// Adds two GF elements (a + b = a XOR b).
+    ///
+    /// # Safety Guarantees
+    /// - Constant-time: Single XOR instruction.
+    /// - Thread-safe: No shared state.
+    /// - Side-channel resistant: No data-dependent branches or memory access.
+    ///
+    /// # Prohibited
+    /// - None specific.
+    ///
+    /// # Performance
+    /// - Negligible (~1 cycle on x86-64).
+    ///
+    /// # Failure Modes
+    /// - None.
+    ///
+    /// # Whitepaper Compliance
+    /// - Section 1.1: Additive sharing basis (a + b = a ⊕ b in BGW MPC).
+    #[inline(always)]
+    fn add(self, rhs: Self) -> Self {
+        GF256(self.0 ^ rhs.0)
+    }
+}
+
+impl AddAssign for GF256 {
+    /// In-place addition (self += rhs).
+    ///
+    /// # Safety Guarantees
+    /// - As in Add impl.
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
+/// GF(2^8) subtraction: same as addition (a - b = a + b).
+impl Sub for GF256 {
+    type Output = Self;
+
+    /// Subtracts two GF elements (a - b = a + b).
+    ///
+    /// # Safety Guarantees
+    /// - Constant-time: Delegates to Add.
+    /// - Thread-safe.
+    /// - Side-channel resistant.
+    ///
+    /// # Prohibited
+    /// - None.
+    ///
+    /// # Performance
+    /// - As in Add.
+    ///
+    /// # Failure Modes
+    /// - None.
+    #[inline(always)]
+    fn sub(self, rhs: Self) -> Self {
+        self + rhs
+    }
+}
+
+/// GF(2^8) negation: identity ( -a = a ).
+impl Neg for GF256 {
+    type Output = Self;
+
+    /// Negates a GF element ( -a = a ).
+    ///
+    /// # Safety Guarantees
+    /// - Constant-time: Identity.
+    /// - Thread-safe.
+    /// - Side-channel resistant.
+    ///
+    /// # Prohibited
+    /// - None.
+    ///
+    /// # Performance
+    /// - Zero overhead.
+    ///
+    /// # Failure Modes
+    /// - None.
+    #[inline(always)]
+    fn neg(self) -> Self {
+        self
+    }
+}
+
+/// GF(2^8) multiplication: bit-serial with polynomial reduction (mod 0x11B).
+///
+/// Uses irreducible polynomial 0x11B. Implementation is branch-free using masks for conditionals.
+impl Mul for GF256 {
+    type Output = Self;
+
+  const POLY: u8 = 0x1B;
 
 /// Full irreducible polynomial (x^8 + x^4 + x^3 + x + 1).
 const POLY_FULL: u16 = 0x11B;
@@ -293,32 +495,30 @@ impl GF256 {
 /// Polynomial evaluation over GF(2^8): sum c_i * x^i using Horner's method.
 ///
 /// Constant-time for fixed-length polys (e.g., SIP=64 coeffs).
+/// Evaluates polynomial p(x) = c0 + c1*x + ... + cn*x^n over GF(2^8) using Horner's method.
+///
+/// Constant-time for fixed-length polynomials (e.g., SIP with 64 coefficients).
+///
+/// # Safety Guarantees
+/// - Constant-time: Fixed iterations = coeffs.len()
+/// - Thread-safe: No mutation
+/// - Side-channel resistant: No secret-dependent indexing
+///
+/// # Performance
+/// - O(n) multiplications and additions
+///
+/// # Panics
+/// In debug builds, panics if coeffs.len() > 128 (DoS prevention)
+///
+/// # Whitepaper Compliance
+/// - Section 1.2/7.1: Core for SIP MAC poly_eval(ciphertext || metadata, mac_key)
 pub fn poly_eval(coeffs: &[GF256], x: GF256) -> GF256 {
-    ///
-    /// Evaluates p(x) = c0 + c1*x + ... + cn*x^n over GF(2^8) via Horner's rule.
-    ///
-    /// # Safety Guarantees
-    /// - Constant-time: Fixed iterations = coeffs.len() (known at call site for SIP).
-    /// - Thread-safe: No mutation.
-    /// - Side-channel resistant: No secret-dependent indexing (coeffs public or constant).
-    ///
-    /// # Prohibited
-    /// - Variable-length coeffs in hot paths (use fixed arrays for SIP).
-    ///
-    /// # Performance
-    /// - O(n) muls/adds; ~few μs for n=64.
-    ///
-    /// # Failure Modes
-    /// - Empty slice: Returns 0 (degenerate poly).
-    /// - Excessive length (>128): Bounded in debug_assertions to prevent DoS.
-    ///
-    /// # Whitepaper Compliance
-    /// - Section 1.2/7.1: Core for SIP MAC poly_eval(ciphertext || metadata, mac_key).
     #[cfg(debug_assertions)]
     {
         assert!(coeffs.len() <= 128, "poly_eval: excessive coefficients (DoS risk)");
     }
-    let mut result = GF256(0u8);
+    
+    let mut result = ZERO;
     for &c in coeffs.iter().rev() {
         result = result * x + c;
     }
@@ -398,4 +598,5 @@ mod tests {
         // Assuming tables correctly precomputed; test consistency with bit-serial.
         assert_eq!(GF256(0x02).mul_table(GF256(0x03)), GF256(0x06));
     }
+
 }
