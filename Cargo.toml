@@ -29,6 +29,7 @@ i2p = []
 dbap = []
 paranoid = []
 watchdog = []
+gf256-table = []
 
 [profile.release]
 opt-level = 3

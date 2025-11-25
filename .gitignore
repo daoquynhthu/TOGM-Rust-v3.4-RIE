@@ -4,6 +4,10 @@
 /target/
 **/target/
 
+# 临时构建目录（Windows 链接器锁规避，测试隔离输出）
+/target_temp/
+**/target_temp/
+
 # Rust 增量编译 / 临时构建文件
 **/*.rs.bk
 
