@@ -5,6 +5,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
+use zeroize::Zeroizing;
 use super::{EntropySource, EntropyError};
 
 /// Aggregator that collects from multiple sources.
@@ -31,35 +32,55 @@ impl EntropyAggregator {
     /// Fills the destination buffer by collecting from all sources and XORing the results.
     ///
     /// This ensures that if any single source is good, the result is good (assuming independent sources).
+    ///
+    /// This implementation attempts to be constant-time regarding the success/failure of individual sources.
+    /// It includes retry logic to ensure robustness against transient failures.
     pub fn fill(&mut self, dest: &mut [u8]) -> Result<(), EntropyError> {
         if self.sources.is_empty() {
             return Err(EntropyError::InitFailed);
         }
 
-        // Initialize dest with zeros so we can XOR into it
-        for b in dest.iter_mut() {
-            *b = 0;
-        }
+        const MAX_RETRIES: usize = 5;
+        let mut retry_count = 0;
 
-        let mut temp_buf = alloc::vec![0u8; dest.len()];
-        let mut success_count = 0;
-
-        for source in &mut self.sources {
-            // Try to fill temp buffer
-            if source.fill(&mut temp_buf).is_ok() {
-                // XOR into dest
-                for (d, s) in dest.iter_mut().zip(temp_buf.iter()) {
-                    *d ^= *s;
-                }
-                success_count += 1;
+        loop {
+            // Initialize dest with zeros so we can XOR into it
+            for b in dest.iter_mut() {
+                *b = 0;
             }
-        }
 
-        if success_count == 0 {
-            return Err(EntropyError::CollectionFailed);
-        }
+            let mut temp_buf = Zeroizing::new(alloc::vec![0u8; dest.len()]);
+            let mut any_success = 0u8;
 
-        Ok(())
+            for source in &mut self.sources {
+                // Always fill, always XOR, use mask to handle failures
+                let result = source.fill(&mut temp_buf);
+                let success_mask = (result.is_ok() as u8).wrapping_neg(); // 0xFF or 0x00
+                any_success |= success_mask;
+                
+                // XOR into dest (always execute, mask handles failures)
+                for (d, s) in dest.iter_mut().zip(temp_buf.iter()) {
+                    *d ^= *s & success_mask;
+                }
+                
+                // Clear temp buffer for next source (prevent data leakage between sources)
+                for b in temp_buf.iter_mut() {
+                    *b = 0;
+                }
+            }
+
+            if any_success != 0 {
+                return Ok(());
+            }
+
+            retry_count += 1;
+            if retry_count >= MAX_RETRIES {
+                return Err(EntropyError::CollectionFailed);
+            }
+            
+            // Hint to CPU that we are in a spin-wait loop
+            core::hint::spin_loop();
+        }
     }
 }
 
@@ -79,21 +100,8 @@ impl EntropySource for EntropyAggregator {
     }
 
     fn entropy_estimate(&self) -> f64 {
-        // Return the maximum estimate from all sources?
-        // Or the sum (capped at 8.0)?
-        // For safety, we return the max estimate of any single source, 
-        // because we don't know if sources are independent.
-        // But if we assume independence, it would be higher.
-        // Let's go with a conservative approach: max(estimates).
-        
-        let mut max_est = 0.0;
-        for source in &self.sources {
-            let est = source.entropy_estimate();
-            if est > max_est {
-                max_est = est;
-            }
-        }
-        max_est
+        let sum: f64 = self.sources.iter().map(|s| s.entropy_estimate()).sum();
+        sum.min(8.0)
     }
 }
 

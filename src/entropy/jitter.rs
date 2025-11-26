@@ -49,9 +49,9 @@ impl JitterRng {
         #[cfg(target_arch = "aarch64")]
         {
             // Use CNTVCT_EL0 (Virtual Count Register)
-            let mut cnt: u64;
+            let cnt: u64;
             unsafe {
-                core::arch::asm!("mrs {}, cntvct_el0", out(reg) cnt);
+                core::arch::asm!("mrs {}, cntvct_el0", out(reg) cnt, options(pure, nomem, nostack));
             }
             cnt
         }
@@ -65,14 +65,14 @@ impl JitterRng {
     }
 
     /// Performs a tiny amount of CPU-intensive work to induce jitter.
-    #[inline(always)]
+    #[inline(never)]
     fn jitter_loop() {
-        // Volatile read/write or black_box to prevent optimization
         let mut x = 0u64;
-        for i in 0..10 {
-            x = x.wrapping_add(i);
-            core::hint::black_box(x);
+        for i in 0..100 {
+            x = x.wrapping_add(i).wrapping_mul(0x123456789ABCDEF);
+            core::hint::black_box(&x);
         }
+        core::hint::black_box(x);
     }
 }
 
@@ -88,12 +88,28 @@ impl EntropySource for JitterRng {
     }
 
     fn fill(&mut self, dest: &mut [u8]) -> Result<(), EntropyError> {
-        // Verify we have a working timer
-        let t1 = Self::get_timestamp();
-        Self::jitter_loop();
-        let t2 = Self::get_timestamp();
-        if t1 == t2 && t1 == 0 {
-            return Err(EntropyError::NotSupported);
+        // Verify we have a working timer with retries
+        // We retry a few times to distinguish between "fast CPU/low res timer" and "broken timer"
+        let mut init_retries = 0;
+        loop {
+            let t1 = Self::get_timestamp();
+            Self::jitter_loop();
+            let t2 = Self::get_timestamp();
+            
+            // If timer returns 0, it likely means not supported (based on get_timestamp impl)
+            if t1 == 0 && t2 == 0 {
+                return Err(EntropyError::NotSupported);
+            }
+            
+            if t1 != t2 {
+                break; // Timer is working and advancing
+            }
+            
+            init_retries += 1;
+            if init_retries > 10 {
+                // Timer seems stuck or resolution is too low
+                return Err(EntropyError::NotSupported);
+            }
         }
 
         // Entropy harvesting loop
@@ -104,12 +120,23 @@ impl EntropySource for JitterRng {
             for _ in 0..8 {
                 let mut bit_entropy = 0u64;
                 for _ in 0..8 {
-                    let start = Self::get_timestamp();
-                    Self::jitter_loop();
-                    let end = Self::get_timestamp();
-                    
-                    // Delta contains the jitter
-                    let delta = end.wrapping_sub(start);
+                    // Retry loop for valid delta
+                    let mut delta_retries = 0;
+                    let mut delta;
+                    loop {
+                        let start = Self::get_timestamp();
+                        Self::jitter_loop();
+                        let end = Self::get_timestamp();
+                        delta = end.wrapping_sub(start);
+                        
+                        if delta > 0 { break; }
+                        
+                        delta_retries += 1;
+                        if delta_retries > 100 {
+                             // If we can't get a delta after 100 tries, assume source failure
+                             return Err(EntropyError::CollectionFailed);
+                        }
+                    }
                     
                     // Fold the delta into our entropy pool
                     // We XOR the least significant bits where jitter is highest
@@ -129,9 +156,9 @@ impl EntropySource for JitterRng {
 
     fn entropy_estimate(&self) -> f64 {
         // CPU jitter quality varies wildly. 
-        // We assume ~0.5 bits of min-entropy per output bit after 8x oversampling.
-        // This is conservative.
-        4.0
+        // We assume ~1.0 bits of min-entropy per output bit after 8x oversampling and parity compression.
+        // This is a conservative estimate based on the analysis that parity compression loses significant entropy.
+        1.0
     }
 }
 

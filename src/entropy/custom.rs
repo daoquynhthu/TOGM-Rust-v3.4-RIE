@@ -46,8 +46,9 @@ impl EntropySource for CustomSource {
     }
 
     fn entropy_estimate(&self) -> f64 {
-        // Conservative estimate: assume 50% entropy if not specified
-        4.0
+        // Conservative estimate: assume 2.0 bits of entropy per byte if not specified
+        // Warning: User input entropy quality is unknown.
+        2.0
     }
 }
 

@@ -1,20 +1,18 @@
 # Threshold OTP Group Messaging (TOGM) v3.4 Reinforced Initialization & Entropy Integrity Edition (RIE)
 
-**Three Inconquerabilities — Hardened to Absoluteness**  
-**Unconditional Information-Theoretic Security**
+**Core Security Properties: Reinforced Initialization and Entropy Integrity**
 
 *Anonymous Geek Collective*  
 *November 23, 2025*
 
 ## Overview
 
-TOGM v3.4 RIE is the ultimate hardening of the Absolute Purity line, addressing all initialization weaknesses through Multi-Source Entropy Aggregation (MSEA), Universal Hash extraction, and full NIST SP 800-90B validation. The protocol's architecture is implemented in Rust with a modular, no_std core, ensuring zero external cryptographic dependencies and portability across anonymity networks like Tor and I2P.
+TOGM v3.4 RIE enhances the initialization process through Multi-Source Entropy Aggregation (MSEA), Universal Hash extraction, and full NIST SP 800-90B validation. The protocol is implemented in Rust with a modular, no_std core, ensuring no external cryptographic dependencies and portability across anonymity networks like Tor and I2P.
 
-The Master Pad construction via BGW MPC over GF(2^8) guarantees information-theoretic security: even if drand is fully compromised and t-1 devices are backdoored, the gigabyte-scale pad remains unconditionally random, provided at least one honest hardware entropy source contributes. Scale-aware design adapts entropy sourcing—continuous drand for small groups (n ≤ 50) and aggregated hardware noise for large groups (n > 50)—while DBAP enforces device integrity across local, pairwise, and threshold layers.
+The Master Pad is constructed via BGW MPC over GF(2^8), providing information-theoretic security: under the assumption of at least one honest hardware entropy source, the gigabyte-scale pad maintains statistical uniformity (SD ≤ 2^{-80}) even if drand is compromised and up to t-1 devices are backdoored. The design adapts entropy sourcing based on group size—continuous drand for small groups (n ≤ 50) and aggregated hardware noise for large groups (n > 50)—while DBAP enforces device integrity across local, pairwise, and threshold layers.
 
-Key engineering features include SIMD-optimized XOR in `core/xor.rs`, asynchronous bootstrap in `protocol/bootstrap/orchestrator.rs`, and watchdog anomaly detection. Post-bootstrap, the system operates fully offline, with pure OTP per 4096-byte block and SIP for integrity.
-
-**Repository:** https://github.com/daoquynhthu/TOGM-Rust-v3.4-RIE
+Key features include SIMD-optimized XOR in core/xor.rs, asynchronous bootstrap in protocol/bootstrap/orchestrator.rs, and watchdog anomaly detection. Post-bootstrap, the system operates fully offline, with pure OTP per 4096-byte block and SIP for integrity.
+**Repository**: https://github.com/daoquynhthu/TOGM-Rust-v3.4-RIE 
 
 ## Security Properties
 
@@ -45,12 +43,13 @@ For full details, refer to the [whitepaper](docs/WHITEPAPER_COMPLIANCE.md) and [
 | v3.1    | Remove runtime drand | One-time BLAKE3 chain (computational, deprecated) |
 | v3.2    | Gigabyte Master Pad  | Pure OTP + Sixth Iron Law (`pad/lifecycle.rs`) |
 | v3.2 APE| Absolute Purity      | Physical entropy + continuous drand (`entropy/sources.rs`) |
-| v3.4 RIE| Initialization unconquerable | MSEA + Universal Hash + NIST 90B + SIP + DBAP + Rust no_std core |
+| v3.3 RIE| Initialization unconquerable | MSEA + Universal Hash + NIST 90B + SIP + DBAP + Rust no_std core |
+| v3.4 RIE| Code documentation and compliance | Strict Rustdoc comments + audit plan integration (docs/RUST_AUDIT_PLAN.md) |
 
 ## Prerequisites
 
-- Rust 1.75+ (stable channel)
-- Cargo with LTO=thin and codegen-units=1 enabled (see `.cargo/config.toml`)
+- Rust 1.75+ (stable channel; install via rustup: rustup toolchain install stable --force)
+- Cargo with LTO=thin and codegen-units=1 enabled (see .cargo/config.toml)
 - Hardware entropy sources: CPU jitter, RdRand (Intel), audio/video capture (locked-mode enforced)
 - Anonymity networks: Tor (via arti-client) and/or I2P (via i2pd-client)
 - No external crypto dependencies (enforced via `Cargo.lock`)
@@ -147,7 +146,7 @@ Audit docs: RUST_AUDIT_FIXES.md; invites for Trail of Bits/Cure53.
 
 
 ### Threat Model
-Adversary: Computationally unbounded, active, controls public channels. Capabilities: drand compromise, <t backdoors, traffic analysis on Tor/I2P, entropy poisoning. Honest majority t=⌈2n/3⌉. Defeated via MSEA linearity, DBAP proofs, Iron Laws.
+Adversary: Computationally unbounded, active, controls public channels. Capabilities: drand compromise, <t backdoors, traffic analysis on Tor/I2P, entropy poisoning. Honest majority t=⌈2n/3⌉. Addressed via MSEA linearity, DBAP proofs, and Iron Laws, under the honest majority assumption.
 
 ## Contributing
 Contributions must adhere to WHITEPAPER_COMPLIANCE.md: no PRNG/PRF/XOF; NIST-compliant entropy; full DBAP/SIP. Fork, branch, PR with tests.

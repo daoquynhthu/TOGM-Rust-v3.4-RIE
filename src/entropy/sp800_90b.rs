@@ -48,9 +48,10 @@ impl HealthTester {
 
     /// Repetition Count Test (RCT)
     fn check_repetition_count(&mut self, sample: u8) -> Result<(), EntropyError> {
-        // Simple RCT: cutoff at 64 repetitions (conservative limit for basic detection)
-        // In a real deployment, this should be calculated based on entropy estimate.
-        const RCT_CUTOFF: usize = 64;
+        // For H=4.0 (min-entropy per byte), alpha=2^-20:
+        // C = 1 + ceil(-20 / H) = 1 + ceil(-20 / 4) = 1 + 5 = 6
+        // Add safety margin: use 10
+        const RCT_CUTOFF: usize = 10;
 
         if sample == self.last_sample {
             self.repetition_count += 1;
@@ -68,9 +69,12 @@ impl HealthTester {
     fn check_adaptive_proportion(&mut self, sample: u8) -> Result<(), EntropyError> {
         // Window size W = 512
         const W: usize = 512;
-        // Cutoff C = 13 (approximate for H = 6.0, alpha = 2^-20)
-        // For 8-bit samples, this needs tuning, but using a safe upper bound.
-        const C: usize = 400; // Extremely loose bound for "non-complex" version
+        // For H=4.0, alpha=2^-20:
+        // C ≈ W * (1/2^H + 2.576 * sqrt((1 - 1/2^H) / (W * 2^H)))
+        // ≈ 512 * (1/16 + 2.576 * sqrt((15/16) / (512*16)))
+        // ≈ 32 + 7 = 39
+        // Use conservative 50
+        const C: usize = 50;
 
         if self.window_count == 0 {
             // Start of new window
@@ -110,11 +114,11 @@ mod tests {
     #[test]
     fn test_repetition_failure() {
         let mut tester = HealthTester::new();
-        // Feed 63 zeros (should be fine)
-        for _ in 0..63 {
+        // Feed 9 zeros (should be fine, cutoff is 10)
+        for _ in 0..9 {
             assert!(tester.feed(0).is_ok());
         }
-        // Next one should fail (count becomes 64)
+        // Next one should fail (count becomes 10)
         assert_eq!(tester.feed(0), Err(EntropyError::HealthTestFailed));
     }
 }

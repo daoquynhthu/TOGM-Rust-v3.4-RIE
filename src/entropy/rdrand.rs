@@ -30,18 +30,34 @@ impl RdRandSource {
     /// Tries to create a new RDRAND source if supported.
     /// Returns None if detection fails or is not implemented in no_std.
     pub fn new() -> Option<Self> {
-        // In no_std, CPUID checks require assembly. 
-        // For simplicity in this version, we rely on the user knowing their hardware
-        // or using std feature for detection (omitted here).
-        // We return Some() optimistically, but safety docs apply.
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            // Check CPUID.01H:ECX.RDRAND[bit 30]
+            if !Self::cpuid_check_rdrand() {
+                return None;
+            }
+        }
+        
         Some(Self { _private: () })
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    fn cpuid_check_rdrand() -> bool {
+        #[cfg(target_arch = "x86")]
+        use core::arch::x86::__cpuid;
+        #[cfg(target_arch = "x86_64")]
+        use core::arch::x86_64::__cpuid;
+        
+        unsafe {
+            let cpuid = __cpuid(1);
+            (cpuid.ecx & (1 << 30)) != 0
+        }
     }
 }
 
 impl Default for RdRandSource {
     fn default() -> Self {
-        // Optimistic default
-        Self { _private: () }
+        Self::new().expect("RDRAND not supported on this CPU")
     }
 }
 
@@ -53,7 +69,7 @@ impl EntropySource for RdRandSource {
     fn fill(&mut self, dest: &mut [u8]) -> Result<(), EntropyError> {
         let mut i = 0;
         let mut retry_count = 0;
-        const MAX_RETRIES: usize = 10;
+        const MAX_RETRIES: usize = 100; // Increased retry count per Intel recommendation
 
         while i < dest.len() {
             #[cfg(target_arch = "x86_64")]
