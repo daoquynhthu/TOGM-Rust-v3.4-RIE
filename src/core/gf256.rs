@@ -69,6 +69,7 @@ impl From<GF256> for u8 {
 /// GF(2^8) addition: simple XOR, as the field characteristic is 2.
 ///
 /// This is bitwise XOR, which is linear over GF(2^8).
+#[allow(clippy::suspicious_arithmetic_impl)]
 impl Add for GF256 {
     type Output = Self;
 
@@ -207,49 +208,94 @@ impl GF256 {
     /// - Section 1.1: Essential for BGW multiplication gates.
     #[inline(always)]
     pub fn inv(self) -> Self {
-        // Compute a^{-1} = a^{254} using Fermat's Little Theorem.
-        // 254 = 0b11111110
-        // Square-and-multiply chain: 
-        // x^2, x^4, x^8, x^16, x^32, x^64, x^128 (squaring)
-        // Accumulate: x^2 * x^4 * ... * x^128 = x^{254} ? No, that's sum of exponents.
-        // Correct chain for 254 (11111110):
-        // a
+        // Itoh-Tsujii algorithm for a^{-1} = a^{254} in GF(2^8).
+        // Optimized chain (11 operations):
         // a^2
         // a^3 = a^2 * a
         // a^6 = (a^3)^2
-        // a^7 = a^6 * a
-        // a^14 = (a^7)^2
-        // a^15 = a^14 * a
+        // a^12 = (a^6)^2
+        // a^15 = a^12 * a^3
         // a^30 = (a^15)^2
-        // a^31 = a^30 * a
-        // a^62 = (a^31)^2
-        // a^63 = a^62 * a
-        // a^126 = (a^63)^2
-        // a^127 = a^126 * a
-        // a^254 = (a^127)^2
+        // a^60 = (a^30)^2
+        // a^120 = (a^60)^2
+        // a^240 = (a^120)^2
+        // a^255 = a^240 * a^15
+        // a^254 = a^255 * a^{-1} = a^255 / a ?? No, wait.
+        // Itoh-Tsujii typically computes a^(2^m - 1) then adjusts.
+        // For GF(2^8), inverse is a^{254}.
+        // 254 = 11111110_2.
+        // Let's use the verified Itoh-Tsujii variant from the audit report:
+        // Chain: a^2 → a^3 → a^6 → a^12 → a^15 → a^30 → a^60 → a^120 → a^240 → a^255 → a^254
+        // Note: a^255 is always 1 for a != 0. 
+        // Actually, a^254 = (a^255) * a^{-1} is not helpful if we want to FIND a^{-1}.
+        // The trick is 254 = 255 - 1.
+        // 
+        // Let's use the explicit construction for 254:
+        // 254 = 127 * 2 = (1111111_2) * 2.
+        //
+        // Audit report suggested chain:
+        // x2 = x^2
+        // x3 = x2 * x
+        // x6 = x3^2
+        // x12 = x6^2
+        // x15 = x12 * x3      (1111_2)
+        // x30 = x15^2
+        // x60 = x30^2
+        // x120 = x60^2
+        // x240 = x120^2       (11110000_2)
+        // x255 = x240 * x15   (11111111_2) -> This is a^255 (=1)
+        // x254 = x255 * x255 * x  ?? No, that's a^255 * a^255 * x = x.
+        //
+        // Wait, the audit report says:
+        // let x254 = x255 * x255 * x; // a^254 = a^255 * a^{-1} = a^255 / a
+        // This comment in the audit report seems slightly confused or I am misreading.
+        // "a^254 = a^255 * a^{-1}" -> True.
+        // But we don't know a^{-1} yet!
+        // 
+        // Let's look at the "Equivalent" line: "x254 = x240 * x12 * x2".
+        // x240 = a^(240) = a^(11110000)
+        // x12  = a^(12)  = a^(00001100)
+        // x2   = a^(2)   = a^(00000010)
+        // Sum exponents: 240 + 12 + 2 = 254. Correct.
+        //
+        // So we need x240, x12, x2.
+        // We have x2, x3, x6, x12.
+        // We have x15.
+        // We have x240 (from x15 -> x30 -> x60 -> x120 -> x240).
+        //
+        // So the path is:
+        // x2 = x^2
+        // x3 = x2 * x
+        // x6 = x3^2
+        // x12 = x6^2
+        // x15 = x12 * x3
+        // x30 = x15^2
+        // x60 = x30^2
+        // x120 = x60^2
+        // x240 = x120^2
+        // x254 = x240 * x12 * x2
+        //
+        // Ops count:
+        // S: x2, x6, x12, x30, x60, x120, x240 (7 squarings)
+        // M: x3, x15, x254 (2 mults for x254, 1 for x15, 1 for x3) -> 4 mults.
+        // Total: 11 ops. Matches the optimal count.
 
         let x = self;
-        let x2 = x * x;
-        let x3 = x2 * x;
-        let x6 = x3 * x3;
-        let x7 = x6 * x;
-        let x14 = x7 * x7;
-        let x15 = x14 * x;
-        let x30 = x15 * x15;
-        let x31 = x30 * x;
-        let x62 = x31 * x31;
-        let x63 = x62 * x;
-        let x126 = x63 * x63;
-        let x127 = x126 * x;
-        let x254 = x127 * x127;
+        let x2 = x * x;         // 2
+        let x3 = x2 * x;        // 3
+        let x6 = x3 * x3;       // 6
+        let x12 = x6 * x6;      // 12
+        let x15 = x12 * x3;     // 15
+        let x30 = x15 * x15;    // 30
+        let x60 = x30 * x30;    // 60
+        let x120 = x60 * x60;   // 120
+        let x240 = x120 * x120; // 240
+        let x254 = x240 * x12 * x2; // 240 + 12 + 2 = 254
 
         // Constant-time zero check
         let is_zero = (self.0 == 0) as u8;
-        // mask = 0xFF if zero, 0x00 if not zero
         let mask = 0u8.wrapping_sub(is_zero);
         
-        // If self is 0, result is 0. If self != 0, result is x254.
-        // (x254 & !mask) | (0 & mask) -> x254 & !mask
         GF256(x254.0 & !mask)
     }
 
@@ -272,7 +318,7 @@ impl GF256 {
     ///
     /// # Whitepaper Compliance
     /// - Section 1.1: Safe div for poly_eval without abort/panic.
-    pub fn div(self, rhs: Self) -> Option<Self> {
+    pub fn checked_div(self, rhs: Self) -> Option<Self> {
         if rhs.0 == 0 {
             None
         } else {
@@ -360,9 +406,9 @@ mod tests {
 
     #[test]
     fn test_div() {
-        assert_eq!(GF256(0x02).div(GF256(0x00)), None);
-        assert_eq!(GF256(0x00).div(GF256(0x01)), Some(GF256(0x00)));
-        if let Some(d) = GF256(0x03).div(GF256(0x02)) {
+        assert_eq!(GF256(0x02).checked_div(GF256(0x00)), None);
+        assert_eq!(GF256(0x00).checked_div(GF256(0x01)), Some(GF256(0x00)));
+        if let Some(d) = GF256(0x03).checked_div(GF256(0x02)) {
             assert_eq!(d * GF256(0x02), GF256(0x03));
         } else {
             panic!("division failed unexpectedly");

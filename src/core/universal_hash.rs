@@ -18,7 +18,8 @@ pub enum UhError {
 /// Convert a little-endian byte slice into 64-bit words, padding tail zeros.
 #[inline(always)]
 fn to_words_le(bits: usize, bytes: &[u8]) -> Vec<u64> {
-    let n_words = bits.div_ceil(64);
+    #[allow(clippy::manual_div_ceil)]
+    let n_words = (bits + 63) / 64;
     let mut out = Vec::with_capacity(n_words);
     
     // Optimized bulk copy using chunks

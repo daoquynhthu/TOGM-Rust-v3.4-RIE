@@ -30,13 +30,6 @@ impl JitterRng {
     pub fn new() -> Self {
         Self { _private: () }
     }
-}
-
-impl Default for JitterRng {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
     /// Reads a high-resolution CPU timestamp counter.
     #[inline(always)]
@@ -80,6 +73,12 @@ impl Default for JitterRng {
             x = x.wrapping_add(i);
             core::hint::black_box(x);
         }
+    }
+}
+
+impl Default for JitterRng {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

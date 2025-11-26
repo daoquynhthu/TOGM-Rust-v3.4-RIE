@@ -241,6 +241,7 @@ unsafe fn xor_avx2(a: *const u8, b: *const u8, out: *mut u8, len: usize) {
 /// - Section 7.1: Maximum-throughput OTP for bulk encryption.
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx512f")]
+#[allow(clippy::incompatible_msrv)]
 unsafe fn xor_avx512(a: *const u8, b: *const u8, out: *mut u8, len: usize) {
     use core::arch::x86_64::*;
     let mut i = 0;
@@ -262,7 +263,6 @@ unsafe fn xor_avx512(a: *const u8, b: *const u8, out: *mut u8, len: usize) {
     } else {
         // Standard path: unaligned loads/stores
         while i + 64 <= len {
-            // Note: _mm512_loadu_si512 expects *const __m512i in this toolchain
             let va = _mm512_loadu_si512(a.add(i) as *const __m512i);
             let vb = _mm512_loadu_si512(b.add(i) as *const __m512i);
             let vout = _mm512_xor_si512(va, vb);

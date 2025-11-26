@@ -9,6 +9,12 @@ use crate::core::gf256::GF256;
 
 pub const MAC_LEN: usize = 64;
 
+const _: () = {
+    assert!(core::mem::size_of::<GF256>() == 1);
+    assert!(core::mem::align_of::<GF256>() == 1);
+    assert!(core::mem::size_of::<[GF256; MAC_LEN]>() == MAC_LEN);
+};
+
 /// Compute SIP-64 tag for `metadata || ciphertext` with a 64-byte GF(2^8) key.
 #[inline(always)]
 pub fn sip64_tag(ciphertext: &[u8], metadata: &[u8], mac_key: &[u8; MAC_LEN]) -> [u8; MAC_LEN] {
