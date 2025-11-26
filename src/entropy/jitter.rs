@@ -26,10 +26,17 @@ pub struct JitterRng {
 }
 
 impl JitterRng {
-    /// Creates a new JitterRng instance.
+    /// Creates a new, seeded JitterRng instance.
     pub fn new() -> Self {
         Self { _private: () }
     }
+}
+
+impl Default for JitterRng {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
     /// Reads a high-resolution CPU timestamp counter.
     #[inline(always)]

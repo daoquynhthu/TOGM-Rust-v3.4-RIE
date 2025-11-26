@@ -3,6 +3,7 @@
 use crate::core::masterpad::{MasterPad, PadError};
 use crate::core::sip64::{MAC_LEN, verify as sip_verify};
 use crate::core::otp_engine::{encrypt_and_tag, decrypt, split_block};
+use zeroize::Zeroizing;
 
 // Ratchet provides forward-only session progression over a MasterPad.
 // Each step consumes a block `keystream || mac_key(64B)` and binds the counter
@@ -58,9 +59,12 @@ impl Ratchet {
         let ks_owned = {
             let block = self.pad.peek_block(ciphertext.len())?;
             let (keystream, mac_key) = split_block(block, ciphertext.len()).map_err(|_| RatchetError::TagMismatch)?;
-            let ks = keystream.to_vec();
-            let mut mk: [u8; MAC_LEN] = [0u8; MAC_LEN];
+            
+            // Use Zeroizing to ensure sensitive keys are wiped from stack/heap on drop
+            let ks = Zeroizing::new(keystream.to_vec());
+            let mut mk = Zeroizing::new([0u8; MAC_LEN]);
             mk.copy_from_slice(mac_key);
+            
             if !sip_verify(ciphertext, &meta, &mk, tag) {
                 return Err(RatchetError::TagMismatch);
             }

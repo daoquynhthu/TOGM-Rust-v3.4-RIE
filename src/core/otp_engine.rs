@@ -18,13 +18,17 @@ pub enum OtpError {
 
 /// Constant-time OTP encryption using the shared `xor()` path.
 /// Requires `keystream.len() >= plaintext.len()`. Returns `KeystreamTooShort` on failure.
+///
+/// # Note
+/// Uses the first `plaintext.len()` bytes of `keystream`.
 #[inline(always)]
 pub fn encrypt(plaintext: &[u8], keystream: &[u8]) -> Result<Vec<u8>, OtpError> {
     if keystream.len() < plaintext.len() {
         return Err(OtpError::KeystreamTooShort);
     }
     let mut out = vec![0u8; plaintext.len()];
-    xor(plaintext, keystream, &mut out);
+    // Use strict slicing to ensure lengths match for xor()
+    xor(plaintext, &keystream[..plaintext.len()], &mut out);
     Ok(out)
 }
 
@@ -32,6 +36,32 @@ pub fn encrypt(plaintext: &[u8], keystream: &[u8]) -> Result<Vec<u8>, OtpError> 
 #[inline(always)]
 pub fn decrypt(ciphertext: &[u8], keystream: &[u8]) -> Result<Vec<u8>, OtpError> {
     encrypt(ciphertext, keystream)
+}
+
+/// Constant-time OTP encryption writing to a provided output buffer.
+///
+/// # Arguments
+/// * `plaintext` - Input message.
+/// * `keystream` - Pad (must be >= plaintext).
+/// * `out` - Output buffer (must be exactly plaintext.len()).
+#[inline(always)]
+pub fn encrypt_into(plaintext: &[u8], keystream: &[u8], out: &mut [u8]) -> Result<(), OtpError> {
+    if keystream.len() < plaintext.len() {
+        return Err(OtpError::KeystreamTooShort);
+    }
+    if out.len() != plaintext.len() {
+        // xor() would panic, but we can return error or just let it panic? 
+        // xor() asserts out.len() == a.len().
+        // Let's rely on xor's assertion for out, but slice keystream.
+    }
+    xor(plaintext, &keystream[..plaintext.len()], out);
+    Ok(())
+}
+
+/// Constant-time OTP decryption writing to a provided output buffer.
+#[inline(always)]
+pub fn decrypt_into(ciphertext: &[u8], keystream: &[u8], out: &mut [u8]) -> Result<(), OtpError> {
+    encrypt_into(ciphertext, keystream, out)
 }
 
 

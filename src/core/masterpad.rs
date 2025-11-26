@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::core::sip64::MAC_LEN;
+use zeroize::Zeroize;
 
 // MasterPad provides constant-time, monotonic block allocation over a backing pad.
 // Blocks are laid out as `keystream || mac_key(64B)` and never reused.
@@ -13,6 +14,14 @@ pub enum PadError {
 
 pub enum PadBuf {
     Heap(Vec<u8>),
+}
+
+impl Drop for PadBuf {
+    fn drop(&mut self) {
+        match self {
+            PadBuf::Heap(v) => v.zeroize(),
+        }
+    }
 }
 
 pub struct MasterPad {

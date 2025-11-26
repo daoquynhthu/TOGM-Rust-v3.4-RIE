@@ -133,18 +133,43 @@ impl Mul for GF256 {
     /// - Section 1.1/1.2: Enables Lagrange interpolation and poly MAC over GF(2^8) in reconstruct.rs and sip64.rs.
     #[inline(always)]
     fn mul(self, rhs: Self) -> Self {
-        let mut a: u8 = self.0;
-        let mut b: u8 = rhs.0;
-        let mut p: u8 = 0;
-        for _ in 0..8 {
-            let lsb = b & 1;
-            let add_mask = lsb.wrapping_mul(!0u8);
-            p ^= a & add_mask;
-            let carry = (a >> 7) & 1;
-            let carry_mask = carry.wrapping_mul(!0u8);
-            a = (a << 1) ^ (0x1B & carry_mask);
-            b >>= 1;
-        }
+        let mut a = self.0;
+        let b = rhs.0;
+        let mut p = 0;
+
+        // Unrolled loop for constant-time execution and performance
+        // Bit 0
+        p ^= a & (0u8.wrapping_sub(b & 1));
+        a = (a << 1) ^ (0x1B & (0u8.wrapping_sub(a >> 7)));
+
+        // Bit 1
+        p ^= a & (0u8.wrapping_sub((b >> 1) & 1));
+        a = (a << 1) ^ (0x1B & (0u8.wrapping_sub(a >> 7)));
+
+        // Bit 2
+        p ^= a & (0u8.wrapping_sub((b >> 2) & 1));
+        a = (a << 1) ^ (0x1B & (0u8.wrapping_sub(a >> 7)));
+
+        // Bit 3
+        p ^= a & (0u8.wrapping_sub((b >> 3) & 1));
+        a = (a << 1) ^ (0x1B & (0u8.wrapping_sub(a >> 7)));
+
+        // Bit 4
+        p ^= a & (0u8.wrapping_sub((b >> 4) & 1));
+        a = (a << 1) ^ (0x1B & (0u8.wrapping_sub(a >> 7)));
+
+        // Bit 5
+        p ^= a & (0u8.wrapping_sub((b >> 5) & 1));
+        a = (a << 1) ^ (0x1B & (0u8.wrapping_sub(a >> 7)));
+
+        // Bit 6
+        p ^= a & (0u8.wrapping_sub((b >> 6) & 1));
+        a = (a << 1) ^ (0x1B & (0u8.wrapping_sub(a >> 7)));
+
+        // Bit 7
+        p ^= a & (0u8.wrapping_sub((b >> 7) & 1));
+        // Last 'a' update is unnecessary as it's not used
+
         GF256(p)
     }
 }
@@ -182,14 +207,50 @@ impl GF256 {
     /// - Section 1.1: Essential for BGW multiplication gates.
     #[inline(always)]
     pub fn inv(self) -> Self {
-        if self.0 == 0 {
-            return GF256(0);
-        }
-        let mut result = GF256(1u8);
-        for _ in 0..254 {
-            result = result * self;
-        }
-        result
+        // Compute a^{-1} = a^{254} using Fermat's Little Theorem.
+        // 254 = 0b11111110
+        // Square-and-multiply chain: 
+        // x^2, x^4, x^8, x^16, x^32, x^64, x^128 (squaring)
+        // Accumulate: x^2 * x^4 * ... * x^128 = x^{254} ? No, that's sum of exponents.
+        // Correct chain for 254 (11111110):
+        // a
+        // a^2
+        // a^3 = a^2 * a
+        // a^6 = (a^3)^2
+        // a^7 = a^6 * a
+        // a^14 = (a^7)^2
+        // a^15 = a^14 * a
+        // a^30 = (a^15)^2
+        // a^31 = a^30 * a
+        // a^62 = (a^31)^2
+        // a^63 = a^62 * a
+        // a^126 = (a^63)^2
+        // a^127 = a^126 * a
+        // a^254 = (a^127)^2
+
+        let x = self;
+        let x2 = x * x;
+        let x3 = x2 * x;
+        let x6 = x3 * x3;
+        let x7 = x6 * x;
+        let x14 = x7 * x7;
+        let x15 = x14 * x;
+        let x30 = x15 * x15;
+        let x31 = x30 * x;
+        let x62 = x31 * x31;
+        let x63 = x62 * x;
+        let x126 = x63 * x63;
+        let x127 = x126 * x;
+        let x254 = x127 * x127;
+
+        // Constant-time zero check
+        let is_zero = (self.0 == 0) as u8;
+        // mask = 0xFF if zero, 0x00 if not zero
+        let mask = 0u8.wrapping_sub(is_zero);
+        
+        // If self is 0, result is 0. If self != 0, result is x254.
+        // (x254 & !mask) | (0 & mask) -> x254 & !mask
+        GF256(x254.0 & !mask)
     }
 
     /// Computes self / rhs = self * inv(rhs), returning None on division by zero.
