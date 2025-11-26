@@ -14,12 +14,6 @@
 
 pub mod jitter;
 
-// Optional sources
-#[cfg(feature = "drand")]
-pub mod rdrand; // Using rdrand.rs for hardware/drand related stuff? Or drand client?
-// The file list had `rdrand.rs` (likely Intel RDRAND) and `drand` directory in `net`.
-// I'll stick to the file list I saw: `jitter.rs`, `rdrand.rs` (Intel), `audio.rs`, `video.rs`.
-
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub mod rdrand;
 
@@ -27,6 +21,11 @@ pub mod rdrand;
 pub mod audio;
 #[cfg(feature = "std")]
 pub mod video;
+
+pub mod custom;
+pub mod sources;
+pub mod aggregator;
+pub mod sp800_90b;
 
 /// Error types for entropy collection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
