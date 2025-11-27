@@ -8,14 +8,13 @@
 #![forbid(unsafe_code)]
 
 use core::ops::{Add, AddAssign, Mul, MulAssign};
-
-
+use zeroize::Zeroize;
 
 /// The finite field element type, wrapping a u8.
 ///
 /// This wrapper ensures domain-specific operations and prevents accidental misuse (e.g., raw XOR
 /// instead of GF add).
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Zeroize)]
 #[repr(transparent)]
 pub struct GF256(pub u8);
 

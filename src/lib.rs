@@ -11,3 +11,4 @@ fn panic(_info: &PanicInfo) -> ! { loop {} }
 
 pub mod core;
 pub mod entropy;
+pub mod mpc;
