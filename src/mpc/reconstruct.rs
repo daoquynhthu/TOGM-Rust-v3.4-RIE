@@ -12,6 +12,7 @@
 
 extern crate alloc;
 use alloc::vec::Vec;
+use zeroize::Zeroizing;
 use crate::core::gf256::GF256;
 use crate::mpc::{MpcError, share::Share};
 
@@ -21,12 +22,17 @@ use crate::mpc::{MpcError, share::Share};
 ///
 /// # Arguments
 /// * `shares` - A slice of shares to reconstruct from.
+/// * `k` - The threshold number of shares required.
 ///
 /// # Returns
 /// * `Ok(Vec<u8>)` - The reconstructed secret.
-/// * `Err(MpcError)` - If inputs are invalid (mismatch lengths, duplicates, etc.).
-pub fn reconstruct_secret(shares: &[Share]) -> Result<Vec<u8>, MpcError> {
+/// * `Err(MpcError)` - If inputs are invalid (mismatch lengths, duplicates, insufficient shares, etc.).
+pub fn reconstruct_secret(shares: &[Share], k: u8) -> Result<Vec<u8>, MpcError> {
     if shares.is_empty() {
+        return Err(MpcError::InsufficientShares);
+    }
+    // Validation: Check if we have enough shares
+    if shares.len() < k as usize {
         return Err(MpcError::InsufficientShares);
     }
 
@@ -42,13 +48,14 @@ pub fn reconstruct_secret(shares: &[Share]) -> Result<Vec<u8>, MpcError> {
     }
 
     // Check for duplicate indices
-    // We use a simple O(N^2) check since N is small (<= 255)
-    for i in 0..num_shares {
-        for j in (i + 1)..num_shares {
-            if shares[i].identifier == shares[j].identifier {
-                return Err(MpcError::DuplicateShareIndex);
-            }
+    // Optimized to O(N) using a boolean array
+    let mut seen = [false; 256];
+    for share in shares {
+        let idx = share.identifier as usize;
+        if seen[idx] {
+            return Err(MpcError::DuplicateShareIndex);
         }
+        seen[idx] = true;
     }
 
     // 2. Precompute Lagrange basis polynomials at x=0
@@ -56,7 +63,8 @@ pub fn reconstruct_secret(shares: &[Share]) -> Result<Vec<u8>, MpcError> {
     // Note: in GF(2^8), subtraction is addition (XOR).
     // So lambda_j = product_{m != j} (x_m / (x_m + x_j))
     
-    let mut lambdas = Vec::with_capacity(num_shares);
+    // Zeroizing wrapper to protect sensitive Lagrange coefficients
+    let mut lambdas = Zeroizing::new(Vec::with_capacity(num_shares));
     for j in 0..num_shares {
         let xj = GF256(shares[j].identifier);
         let mut numerator = GF256(1);
@@ -127,17 +135,17 @@ mod tests {
         let shares = split_secret(&secret, k, n, &mut rng).unwrap();
 
         // Reconstruct with all shares
-        let recovered = reconstruct_secret(&shares).expect("Reconstruction failed");
+        let recovered = reconstruct_secret(&shares, k).expect("Reconstruction failed");
         assert_eq!(recovered, secret);
 
         // Reconstruct with subset (k shares)
         let subset = &shares[0..3];
-        let recovered_subset = reconstruct_secret(subset).expect("Subset reconstruction failed");
+        let recovered_subset = reconstruct_secret(subset, k).expect("Subset reconstruction failed");
         assert_eq!(recovered_subset, secret);
 
         // Reconstruct with different subset
         let subset2 = &[shares[1].clone(), shares[3].clone(), shares[4].clone()];
-        let recovered_subset2 = reconstruct_secret(subset2).expect("Subset 2 reconstruction failed");
+        let recovered_subset2 = reconstruct_secret(subset2, k).expect("Subset 2 reconstruction failed");
         assert_eq!(recovered_subset2, secret);
     }
 
@@ -146,22 +154,29 @@ mod tests {
         let share1 = Share::new(1, vec![1, 2]).unwrap();
         let share2 = Share::new(2, vec![3]).unwrap(); // Mismatch length
         let share3 = Share::new(1, vec![1, 2]).unwrap(); // Duplicate ID
+        let k = 2;
 
         // Length mismatch
         assert_eq!(
-            reconstruct_secret(&[share1.clone(), share2]),
+            reconstruct_secret(&[share1.clone(), share2], k),
             Err(MpcError::ShareLengthMismatch)
         );
 
         // Duplicate index
         assert_eq!(
-            reconstruct_secret(&[share1.clone(), share3]),
+            reconstruct_secret(&[share1.clone(), share3], k),
             Err(MpcError::DuplicateShareIndex)
         );
 
         // Empty
         assert_eq!(
-            reconstruct_secret(&[]),
+            reconstruct_secret(&[], k),
+            Err(MpcError::InsufficientShares)
+        );
+
+        // Insufficient shares (len < k)
+        assert_eq!(
+            reconstruct_secret(&[share1.clone()], k),
             Err(MpcError::InsufficientShares)
         );
     }

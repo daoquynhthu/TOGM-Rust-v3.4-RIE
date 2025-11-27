@@ -19,21 +19,29 @@ use super::MpcError;
 /// Contains the x-coordinate (identifier) and the y-coordinate (value).
 #[derive(Clone, PartialEq, Eq, Zeroize, ZeroizeOnDrop)]
 pub struct Share {
+    /// Protocol version.
+    pub version: u8,
+
     /// The x-coordinate (1..=255).
     /// Public information (who owns the share).
-    #[zeroize(skip)]
     pub identifier: u8,
     
     /// The y-coordinates (one per byte of the secret).
     /// Highly sensitive information.
     pub value: Vec<u8>,
+
+    /// Optional integrity check (HMAC-SHA256).
+    /// If present, verifies the integrity of the identifier and value.
+    pub mac: Option<[u8; 32]>,
 }
 
 impl fmt::Debug for Share {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Share")
+            .field("version", &self.version)
             .field("identifier", &self.identifier)
             .field("length", &self.value.len())
+            .field("mac", &self.mac.is_some())
             .field("value", &"***SENSITIVE***")
             .finish()
     }
@@ -41,6 +49,8 @@ impl fmt::Debug for Share {
 
 impl Share {
     /// Creates a new share with validation.
+    ///
+    /// Sets version to 1 and mac to None by default.
     ///
     /// # Arguments
     /// * `identifier` - The x-coordinate (must be non-zero).
@@ -56,7 +66,12 @@ impl Share {
         if value.is_empty() {
             return Err(MpcError::EmptyShare);
         }
-        Ok(Self { identifier, value })
+        Ok(Self { 
+            version: 1,
+            identifier, 
+            value,
+            mac: None 
+        })
     }
 
     /// Returns a reference to the value bytes.

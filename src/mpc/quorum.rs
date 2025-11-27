@@ -18,6 +18,7 @@ use zeroize::Zeroizing;
 use crate::core::gf256::GF256;
 use crate::mpc::{MpcError, share::Share};
 use crate::entropy::{EntropySource, EntropyError};
+use crate::mpc::polynomial::evaluate_polynomial;
 
 /// Splits a secret into `n` shares, requiring `k` shares to reconstruct.
 ///
@@ -49,6 +50,9 @@ pub fn split_secret<R: EntropySource + ?Sized>(
     if n == 0 {
         return Err(MpcError::InvalidShareIndex);
     }
+
+    // Defensive check for potential overflow (though k < 2 prevents k-1 underflow)
+    debug_assert!(k >= 1, "k must be at least 1");
 
     // Initialize storage for shares
     // We process the secret byte-by-byte, but we want to return shares
@@ -105,35 +109,6 @@ pub fn split_secret<R: EntropySource + ?Sized>(
     }
 
     Ok(shares)
-}
-
-/// Evaluates a polynomial at a given point x using Horner's method.
-///
-/// f(x) = c[0] + c[1]*x + ... + c[k-1]*x^(k-1)
-///
-/// # Arguments
-/// * `coeffs` - Coefficients [c0, c1, ..., ck-1]
-/// * `x` - The point to evaluate at
-///
-/// # Returns
-/// * The value f(x)
-#[inline(always)]
-fn evaluate_polynomial(coeffs: &[GF256], x: GF256) -> GF256 {
-    // Horner's method:
-    // result = c[k-1]
-    // result = result * x + c[k-2]
-    // ...
-    // result = result * x + c[0]
-    
-    if coeffs.is_empty() {
-        return GF256(0);
-    }
-
-    let mut result = *coeffs.last().unwrap();
-    for coeff in coeffs.iter().rev().skip(1) {
-        result = result * x + *coeff;
-    }
-    result
 }
 
 #[cfg(test)]

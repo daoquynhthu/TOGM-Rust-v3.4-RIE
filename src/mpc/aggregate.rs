@@ -20,6 +20,7 @@ use zeroize::Zeroizing;
 use crate::core::gf256::GF256;
 use crate::mpc::{MpcError, share::Share};
 use crate::entropy::{EntropySource, EntropyError};
+use crate::mpc::polynomial::evaluate_polynomial;
 
 /// Refreshes a set of shares by adding a polynomial of 0.
 ///
@@ -45,9 +46,12 @@ pub fn refresh_shares<R: EntropySource + ?Sized>(
     if k < 2 {
         return Err(MpcError::InvalidThreshold);
     }
-    // We don't strictly check k <= n here because we might be refreshing a subset,
-    // though typically you refresh all n shares. 
-    // But generating a polynomial of degree k-1 is always valid regardless of how many shares we update.
+    // Validation: k cannot exceed the number of shares being refreshed, 
+    // otherwise the polynomial degree is too high for the number of points (shares).
+    // Although technically we could refresh a subset, for security we enforce consistency.
+    if k > shares.len() as u8 {
+        return Err(MpcError::InvalidThreshold);
+    }
 
     let share_len = shares[0].value.len();
     for share in shares.iter() {
@@ -77,18 +81,25 @@ pub fn refresh_shares<R: EntropySource + ?Sized>(
         }
         let coeffs = Zeroizing::new(coeffs);
 
-        // Update each share
-        for share in shares.iter_mut() {
-            let x = GF256(share.identifier);
-            let update_val = evaluate_polynomial(&coeffs, x);
-            
-            // value = value + update_val (GF256 add is XOR)
-            let current_val = GF256(share.value[p]);
-            share.value[p] = (current_val + update_val).0;
-        }
+        // Update shares
+        update_shares_constant_time(shares, &coeffs, p);
     }
 
     Ok(())
+}
+
+/// Helper to update shares in a loop that attempts to be constant time.
+/// Marked inline(never) to prevent loop unrolling optimizations that might leak index info.
+#[inline(never)]
+fn update_shares_constant_time(shares: &mut [Share], coeffs: &[GF256], p: usize) {
+    for share in shares.iter_mut() {
+        let x = GF256(share.identifier);
+        let update_val = evaluate_polynomial(coeffs, x);
+        
+        // value = value + update_val (GF256 add is XOR)
+        let current_val = GF256(share.value[p]);
+        share.value[p] = (current_val + update_val).0;
+    }
 }
 
 /// Adds two shares homomorphically.
@@ -110,27 +121,6 @@ pub fn add_shares(share1: &Share, share2: &Share) -> Result<Share, MpcError> {
     }
 
     Share::new(share1.identifier, new_value)
-}
-
-// Reuse polynomial evaluation from quorum logic?
-// Ideally this should be a shared helper in a private module or internal utils.
-// For now, I'll duplicate it or make it pub in quorum?
-// Making it pub in quorum is better.
-// But I can't easily edit quorum.rs right now without full rewrite or patch.
-// Given strict instructions "one file at a time", I should probably have anticipated this.
-// I will just implement it here locally as `evaluate_polynomial` is small and I want to avoid modifying quorum.rs again if not needed.
-// Duplication is acceptable for decoupling in this context.
-
-#[inline(always)]
-fn evaluate_polynomial(coeffs: &[GF256], x: GF256) -> GF256 {
-    if coeffs.is_empty() {
-        return GF256(0);
-    }
-    let mut result = *coeffs.last().unwrap();
-    for coeff in coeffs.iter().rev().skip(1) {
-        result = result * x + *coeff;
-    }
-    result
 }
 
 #[cfg(test)]
@@ -174,7 +164,7 @@ mod tests {
         assert_ne!(shares[0].value, original_shares[0].value);
 
         // Reconstruction should still yield original secret
-        let recovered = reconstruct_secret(&shares).expect("Reconstruction failed");
+        let recovered = reconstruct_secret(&shares, k).expect("Reconstruction failed");
         assert_eq!(recovered, secret);
     }
 
@@ -196,9 +186,31 @@ mod tests {
         }
 
         // Reconstruct sum
-        let recovered_sum = reconstruct_secret(&sum_shares).unwrap();
+        let recovered_sum = reconstruct_secret(&sum_shares, k).unwrap();
         
         // Expected sum: 0x10 + 0x20 = 0x30 (XOR)
         assert_eq!(recovered_sum[0], 0x30);
+    }
+    
+    #[test]
+    fn test_add_shares_mismatch() {
+        let s1 = Share::new(1, vec![10]).unwrap();
+        let s2 = Share::new(2, vec![20]).unwrap();
+        let s3 = Share::new(1, vec![10, 20]).unwrap();
+
+        // Identifier mismatch
+        assert_eq!(add_shares(&s1, &s2), Err(MpcError::InvalidShareIndex));
+        
+        // Length mismatch
+        assert_eq!(add_shares(&s1, &s3), Err(MpcError::ShareLengthMismatch));
+    }
+    
+    #[test]
+    fn test_refresh_invalid_k() {
+        let mut rng = MockEntropy { fill_val: 0 };
+        let mut shares = vec![Share::new(1, vec![1]).unwrap()]; // 1 share
+        
+        // k = 2 > shares.len() = 1
+        assert_eq!(refresh_shares(&mut shares, 2, &mut rng), Err(MpcError::InvalidThreshold));
     }
 }
