@@ -35,4 +35,10 @@ pub enum ProtocolError {
     PermissionDenied,
     /// Iron Law violation detected.
     IronLawViolation,
+    /// The payload structure is invalid or length is incorrect.
+    InvalidPayload,
+    /// The message format is malformed.
+    MalformedMessage,
+    /// Feature not yet implemented.
+    Unimplemented,
 }

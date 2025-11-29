@@ -4,10 +4,13 @@
 
 extern crate alloc;
 use alloc::vec::Vec;
+use core::convert::TryFrom;
+use crate::protocol::ProtocolError;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Types of protocol messages.
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Zeroize)]
 pub enum MessageType {
     /// Bootstrap protocol messages (DKG, etc.).
     Bootstrap = 0x01,
@@ -23,21 +26,23 @@ pub enum MessageType {
     Unknown = 0xFF,
 }
 
-impl From<u8> for MessageType {
-    fn from(byte: u8) -> Self {
+impl TryFrom<u8> for MessageType {
+    type Error = ProtocolError;
+
+    fn try_from(byte: u8) -> Result<Self, Self::Error> {
         match byte {
-            0x01 => Self::Bootstrap,
-            0x02 => Self::Chat,
-            0x03 => Self::Control,
-            0x04 => Self::Heartbeat,
-            0x05 => Self::Sync,
-            _ => Self::Unknown,
+            0x01 => Ok(Self::Bootstrap),
+            0x02 => Ok(Self::Chat),
+            0x03 => Ok(Self::Control),
+            0x04 => Ok(Self::Heartbeat),
+            0x05 => Ok(Self::Sync),
+            _ => Err(ProtocolError::InvalidState),
         }
     }
 }
 
 /// A generic protocol message.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Zeroize, ZeroizeOnDrop)]
 pub struct ProtocolMessage {
     /// The type of message.
     pub msg_type: MessageType,

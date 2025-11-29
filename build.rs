@@ -24,15 +24,20 @@ fn main() {
     // 生成 cbindgen 头
     let bindings = cbindgen::generate(&crate_dir).expect("cbindgen generation failed");
     
-    let header_path = Path::new("include/togm.h");
-    if let Err(e) = fs::create_dir_all(header_path.parent().unwrap()) {
-        println!("cargo:warning=Failed to create include/ directory: {}", e);
+    let include_dir = Path::new(&crate_dir).join("include");
+    if !include_dir.exists() {
+        let _ = fs::create_dir_all(&include_dir);
     }
     
-    if !bindings.write_to_file(header_path) {
-        println!("cargo:warning=Failed to write togm.h: check permissions or src/lib.rs content");
+    let header_path = include_dir.join("togm.h");
+    
+    // Use fs::write directly to avoid potential cbindgen file handling issues
+    let mut content = Vec::new();
+    bindings.write(&mut content);
+    if let Err(e) = fs::write(&header_path, content) {
+         println!("cargo:warning=Failed to write togm.h to {:?}: {}", header_path, e);
     } else {
-        println!("cargo:info=togm.h generated successfully");
+         println!("cargo:info=togm.h generated successfully at {:?}", header_path);
     }
 
     // Cargo 指令

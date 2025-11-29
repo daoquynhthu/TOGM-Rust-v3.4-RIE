@@ -16,20 +16,36 @@ crate-type = ["rlib", "staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
+log = "0.4"
 zeroize = { version = "1.8", features = ["zeroize_derive", "alloc"] }
 memmap2 = { version = "0.9", features = ["stable_deref_trait"] }
 blake3 = { version = "1.5", default-features = false, features = ["std"] }
 scrypt = { version = "0.11", default-features = false, features = ["std"] }
+x25519-dalek = { version = "2.0", default-features = false, features = ["static_secrets"] }
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+rand_core = { version = "0.6", default-features = false }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "blocking", "json"], optional = true }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"], optional = true }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
+
+# Arti dependencies for embedded Tor support
+arti-client = { version = "0.24", default-features = false, features = ["tokio", "native-tls"], optional = true }
+tor-rtcompat = { version = "0.24", optional = true }
+tokio = { version = "1.35", features = ["rt", "rt-multi-thread", "macros", "net", "time"], optional = true }
+futures = { version = "0.3", optional = true }
 
 [features]
-default = ["std"]
+default = ["std", "arti"]
 std = []
-drand = []
+drand = ["dep:reqwest", "dep:serde", "dep:serde_json"]
 i2p = []
 dbap = []
 paranoid = []
 watchdog = []
 gf256-table = []
+# Feature to enable embedded Arti client
+arti = ["dep:arti-client", "dep:tor-rtcompat", "dep:tokio", "dep:futures"]
 
 [profile.release]
 opt-level = 3

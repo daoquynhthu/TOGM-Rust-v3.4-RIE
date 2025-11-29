@@ -16,7 +16,14 @@ use std::time::{Instant, Duration};
 pub struct BootstrapOrchestrator {
     current_stage: BootstrapStage,
     #[cfg(feature = "std")]
+    /// Start time of the current stage.
+    ///
+    /// # Monotonicity
+    /// Uses `std::time::Instant` which guarantees monotonicity on supported platforms.
+    /// This prevents timeout checks from being bypassed by system time changes.
     stage_start_time: Instant,
+    /// Tracks if persistence has been verified for the current stage (specifically Persistence stage).
+    persistence_verified: bool,
 }
 
 impl BootstrapOrchestrator {
@@ -26,6 +33,7 @@ impl BootstrapOrchestrator {
             current_stage: BootstrapStage::Idle,
             #[cfg(feature = "std")]
             stage_start_time: Instant::now(),
+            persistence_verified: false,
         }
     }
 
@@ -34,13 +42,25 @@ impl BootstrapOrchestrator {
         self.current_stage
     }
     
+    /// Confirms that persistence has been successfully completed.
+    /// Must be called before advancing from the Persistence stage.
+    pub fn confirm_persistence(&mut self) {
+        self.persistence_verified = true;
+    }
+    
     /// Advances to the next stage.
     ///
     /// # Errors
     /// Returns `ProtocolError::InvalidState` if already complete.
+    /// Returns `ProtocolError::BootstrapFailed` if persistence is not verified when required.
     pub fn advance(&mut self) -> Result<(), ProtocolError> {
+        if self.current_stage == BootstrapStage::Persistence && !self.persistence_verified {
+            return Err(ProtocolError::BootstrapFailed);
+        }
+
         if let Some(next) = self.current_stage.next() {
             self.current_stage = next;
+            self.persistence_verified = false; // Reset for next stages
             #[cfg(feature = "std")]
             {
                 self.stage_start_time = Instant::now();
@@ -65,12 +85,23 @@ impl BootstrapOrchestrator {
                  }
             }
         }
+        #[cfg(not(feature = "std"))]
+        {
+            // In no_std environments, we cannot rely on internal timers.
+            // The caller must strictly manage timeouts externally.
+            // Returning Timeout here forces the caller to handle time logic or fail.
+            // Alternatively, we could return Ok(()) but that was flagged as a security risk (bypassing checks).
+            // The audit suggestion is to return Err(Timeout) or enforce external time.
+            // To be safe and explicit:
+            return Err(ProtocolError::Timeout);
+        }
         Ok(())
     }
     
     /// Resets the orchestrator (e.g., on failure or retry).
     pub fn reset(&mut self) {
         self.current_stage = BootstrapStage::Idle;
+        self.persistence_verified = false;
         #[cfg(feature = "std")]
         {
             self.stage_start_time = Instant::now();
@@ -92,8 +123,29 @@ mod tests {
         
         // Fast forward to complete
         while orch.current_stage() != BootstrapStage::Complete {
+            if orch.current_stage() == BootstrapStage::Persistence {
+                orch.confirm_persistence();
+            }
             orch.advance().unwrap();
         }
+        assert_eq!(orch.current_stage(), BootstrapStage::Complete);
+    }
+
+    #[test]
+    fn test_persistence_check() {
+        let mut orch = BootstrapOrchestrator::new();
+        // Fast forward to Persistence
+        while orch.current_stage() != BootstrapStage::Persistence {
+            orch.advance().unwrap();
+        }
+        
+        // Should fail without confirmation
+        assert_eq!(orch.advance(), Err(ProtocolError::BootstrapFailed));
+        
+        // Confirm
+        orch.confirm_persistence();
+        // Should succeed
+        orch.advance().unwrap();
         assert_eq!(orch.current_stage(), BootstrapStage::Complete);
     }
     

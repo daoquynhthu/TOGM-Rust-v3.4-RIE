@@ -39,6 +39,6 @@ impl MemberExtensionProtocol {
     /// Starts the extension process.
     pub fn start(&self) -> Result<(), ProtocolError> {
         // In a real implementation, this would trigger the MPC PSS flow.
-        Ok(())
+        Err(ProtocolError::Unimplemented)
     }
 }

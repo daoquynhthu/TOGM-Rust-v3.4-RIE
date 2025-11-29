@@ -19,7 +19,7 @@ use alloc::vec::Vec;
 use zeroize::Zeroizing;
 use crate::core::gf256::GF256;
 use crate::mpc::{MpcError, share::Share};
-use crate::entropy::{EntropySource, EntropyError};
+use crate::entropy::EntropySource;
 use crate::mpc::polynomial::evaluate_polynomial;
 
 /// Refreshes a set of shares by adding a polynomial of 0.
@@ -128,7 +128,7 @@ mod tests {
     use super::*;
     use crate::mpc::quorum::split_secret;
     use crate::mpc::reconstruct::reconstruct_secret;
-    use crate::entropy::EntropySource;
+    use crate::entropy::{EntropySource, EntropyError};
 
     struct MockEntropy {
         fill_val: u8,
@@ -188,8 +188,8 @@ mod tests {
         // Reconstruct sum
         let recovered_sum = reconstruct_secret(&sum_shares, k).unwrap();
         
-        // Expected sum: 0x10 + 0x20 = 0x30 (XOR)
-        assert_eq!(recovered_sum[0], 0x30);
+        // Expected: s1 + s2 = 0x10 + 0x20 = 0x30
+        assert_eq!(recovered_sum, vec![0x30]);
     }
     
     #[test]

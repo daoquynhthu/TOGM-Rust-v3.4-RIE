@@ -56,9 +56,20 @@ impl JitterRng {
             cnt
         }
 
-        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64")))]
+        #[cfg(all(feature = "std", not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64"))))]
         {
-            // Fallback for unsupported architectures: return 0.
+            // Fallback for generic std environments (e.g. RISC-V on Linux, WASM)
+            // Use SystemTime as a source of high-res time (best effort)
+            use std::time::SystemTime;
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos() as u64
+        }
+
+        #[cfg(all(not(feature = "std"), not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64"))))]
+        {
+            // Fallback for unsupported architectures without std: return 0.
             // This will cause the source to produce zero entropy, which is detected by health tests.
             0
         }

@@ -123,12 +123,21 @@ fn apply_keystream(key: &[u8; 32], input: &[u8], output: &mut [u8]) {
     // Use BLAKE3 in XOF mode as a stream cipher
     let mut output_reader = blake3::Hasher::new_keyed(key).finalize_xof();
     
-    // Process in chunks to avoid large allocations for keystream
-    // But for XOR, we can just byte-by-byte or chunk
-    let mut stream_byte = [0u8; 1];
-    for (i, &in_byte) in input.iter().enumerate() {
-        output_reader.fill(&mut stream_byte);
-        output[i] = in_byte ^ stream_byte[0];
+    // Process in chunks to improve performance
+    let mut buf = [0u8; 64]; // Process 64 bytes at a time
+    let mut pos = 0;
+    
+    while pos < input.len() {
+        let end = core::cmp::min(pos + buf.len(), input.len());
+        let chunk_len = end - pos;
+        
+        output_reader.fill(&mut buf[..chunk_len]);
+        
+        for i in 0..chunk_len {
+            output[pos + i] = input[pos + i] ^ buf[i];
+        }
+        
+        pos += chunk_len;
     }
 }
 

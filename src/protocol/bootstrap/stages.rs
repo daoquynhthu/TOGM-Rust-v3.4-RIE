@@ -71,4 +71,19 @@ impl BootstrapStage {
             Self::Complete => 0,
         }
     }
+    
+    /// Checks if rollback to a target stage is allowed.
+    pub fn can_rollback_to(&self, target: Self) -> bool {
+        // Only allow rollback to previous stages, and never to Idle from active stages unless failed
+        *self > target && target != Self::Idle
+    }
+
+    /// Rolls back to a previous stage.
+    pub fn rollback_to(&mut self, target: Self) -> Result<(), ()> {
+        if !self.can_rollback_to(target) {
+            return Err(());
+        }
+        *self = target;
+        Ok(())
+    }
 }

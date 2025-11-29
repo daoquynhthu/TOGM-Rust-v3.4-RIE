@@ -24,7 +24,8 @@ pub fn write_atomic<P: AsRef<Path>>(path: P, data: &[u8]) -> Result<(), StorageE
     // Create temp file
     let mut temp_path = dir.to_path_buf();
     // Simple random suffix would be better, but for now fixed suffix
-    temp_path.set_file_name(format!("{}.tmp", path.file_name().unwrap().to_string_lossy()));
+    let filename = path.file_name().ok_or(StorageError::InvalidPath)?;
+    temp_path.set_file_name(format!("{}.tmp", filename.to_string_lossy()));
     
     let mut file = File::create(&temp_path)?;
     

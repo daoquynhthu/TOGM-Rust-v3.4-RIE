@@ -17,7 +17,7 @@ use alloc::vec::Vec;
 use zeroize::Zeroizing;
 use crate::core::gf256::GF256;
 use crate::mpc::{MpcError, share::Share};
-use crate::entropy::{EntropySource, EntropyError};
+use crate::entropy::EntropySource;
 use crate::mpc::polynomial::evaluate_polynomial;
 
 /// Splits a secret into `n` shares, requiring `k` shares to reconstruct.
@@ -100,12 +100,10 @@ pub fn split_secret<R: EntropySource + ?Sized>(
         }
     }
 
-    // Construct Share objects
+    // 3. Construct Share objects
     let mut shares = Vec::with_capacity(n as usize);
-    for (i, value) in share_values.into_iter().enumerate() {
-        // Share indices must be 1..=255
-        let identifier = (i + 1) as u8;
-        shares.push(Share::new(identifier, value)?);
+    for (i, values) in share_values.into_iter().enumerate() {
+        shares.push(Share::new((i + 1) as u8, values)?);
     }
 
     Ok(shares)
@@ -114,7 +112,7 @@ pub fn split_secret<R: EntropySource + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entropy::EntropySource;
+    use crate::entropy::{EntropySource, EntropyError};
     
     /// Mock entropy source for deterministic testing
     struct MockEntropy {
